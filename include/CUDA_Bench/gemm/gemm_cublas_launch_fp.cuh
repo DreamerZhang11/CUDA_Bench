@@ -7,6 +7,7 @@
 #include <cuda_fp16.h>
 #include <cuda_profiler_api.h>
 #include <nvbench/nvbench.cuh>
+#include <iomanip>
 
 template<typename S, typename M, typename A>
 int gemm_cublas_launch_fp()
@@ -134,6 +135,33 @@ int gemm_cublas_launch_fp()
     // Start Multiplication
     cudaEventCreate(&time_start);
     cudaEventCreate(&time_stop);
+    ////warm up 
+    for(int iter=0;iter<2;iter++)
+    {
+        gpuErrchk(cublasGemmEx(handle,                       // handle to cuBLAS library context
+                               matA_op,                      // CUBLAS_OP_N, CUBLAS_OP_T, CUBLAS_OP_C
+                               matB_op,                      // CUBLAS_OP_N, CUBLAS_OP_T, CUBLAS_OP_C
+                               gdim_M,                       // dimension M 
+                               gdim_N,                       // dimension N
+                               gdim_K,                       // dimension K
+                               &alpha,                       // Scaling factor alpha where (alpha)x(AxB)
+                               dev_matA,                     // Pointer to Matrix A on Device
+                               mulDataType,                  // Data type of Matrix A
+                               gdim_M,                        // Leading Dimension of Matrix A
+                               dev_matB,                     // Pointer to Matrix B on Device
+                               mulDataType,                  // Data Type of Matrix B
+                               gdim_K,                        // Leading Dimension of Matrix B
+                               &beta,                        // Scaling factor beta where (beta)xC
+                               dev_matC,                     // Pointer to Matrix C on Device
+                               accDataType,                  // Data Type of Matrix C
+                               gdim_M,                        // Leading Dimension of Matrix C
+                               computeType,                  // Computation Type
+                               algoType                      // Computation Algorithm
+        ));
+    }
+    gpuErrchk(cudaDeviceSynchronize());
+
+    ////loop 
     cudaEventRecord(time_start,0);
     cudaProfilerStart();
     for(int iter=0;iter<gnum_iter;iter++)
@@ -167,8 +195,9 @@ int gemm_cublas_launch_fp()
     cudaEventElapsedTime(&elapsedTime, time_start, time_stop);
     cudaEventDestroy(time_start);
     cudaEventDestroy(time_stop);
+    float flops = 2.0 * gdim_M * gdim_N * gdim_K * 1e-6 / (elapsedTime/gnum_iter);
     std::cout << "[INFO] Execution Time: " << elapsedTime << "ms for " << gnum_iter << " iterations (" << elapsedTime/gnum_iter << "ms/iteration)" << std::endl;
-
+    std::cout << "[INFO] Execution FLOPS: " << std::setprecision(6) << flops << "  GFLOPS" << std::endl;
 
     if(gprint_result)
     {
